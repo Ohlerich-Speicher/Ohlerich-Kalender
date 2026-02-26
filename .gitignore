@@ -1,3 +1,4 @@
 node_modules/
 data/state.json
 public/*.ics
+!public/.gitkeep
