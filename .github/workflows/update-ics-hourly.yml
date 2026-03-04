@@ -1,0 +1,45 @@
+name: Update ICS hourly
+
+on:
+schedule:
+- cron: "0 * * * *"
+workflow_dispatch:
+
+permissions:
+contents: write
+
+concurrency:
+group: update-ics-hourly
+cancel-in-progress: true
+
+jobs:
+build:
+runs-on: ubuntu-latest
+
+steps:
+  - name: Repository laden
+    uses: actions/checkout@v4
+
+  - name: Node installieren
+    uses: actions/setup-node@v4
+    with:
+      node-version: "20"
+
+  - name: Abhängigkeiten installieren
+    run: npm ci
+
+  - name: Kalender erzeugen
+    run: node src/index.js
+
+  - name: Änderungen committen
+    run: |
+      git config user.name "github-actions"
+      git config user.email "github-actions@github.com"
+
+      if [ -n "$(git status --porcelain)" ]; then
+        git add -A
+        git commit -m "Automatische Kalender Aktualisierung"
+        git push
+      else
+        echo "Keine Änderungen"
+      fi
