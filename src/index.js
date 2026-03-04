@@ -32,7 +32,7 @@ function parseEnvColors() {
 async function main() {
   const apartmentsPath = path.join(__dirname, "..", "data", "apartments.json");
   const statePath = path.join(__dirname, "..", "data", "state.json");
-  const outDir = path.join(__dirname, "..", "public");
+  const outDir = path.join(__dirname, "..", "docs");
 
   const apartments = readJson(apartmentsPath);
 
