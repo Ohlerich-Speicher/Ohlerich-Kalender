@@ -1,7 +1,5 @@
-// src/index.js
 const fs = require("fs");
 const path = require("path");
-const crypto = require("crypto");
 
 const { scrapeAll } = require("./scrape");
 const { generateIcsForApartment, writeIcsFile } = require("./generateIcs");
@@ -16,79 +14,59 @@ function writeJson(p, obj) {
 }
 
 function hashDays(days) {
-  const h = crypto.createHash("sha256");
-  h.update((days || []).join("|"));
-  return h.digest("hex");
-}
-
-function parseEnvColors() {
-  const raw = process.env.OCCUPIED_COLORS || "";
-  return raw
-    .split("|")
-    .map((s) => s.trim())
-    .filter(Boolean);
+  return (days || []).join("|");
 }
 
 async function main() {
-  const apartmentsPath = path.join(__dirname, "..", "data", "apartments.json");
-  const statePath = path.join(__dirname, "..", "data", "state.json");
-  const outDir = path.join(__dirname, "..", "docs");
+  const dataDir = path.join(__dirname, "..", "data");
+  const docsDir = path.join(__dirname, "..", "docs");
+
+  const apartmentsPath = path.join(dataDir, "apartments.json");
+  const statePath = path.join(dataDir, "state.json");
 
   const apartments = readJson(apartmentsPath);
 
   let state = { last_hash: {} };
-  if (fs.existsSync(statePath)) state = readJson(statePath);
 
-  const occupiedColors = parseEnvColors();
-  const concurrency = Number(process.env.CONCURRENCY || 3);
+  if (fs.existsSync(statePath)) {
+    state = readJson(statePath);
+  }
 
-  const results = await scrapeAll(apartments, {
-    headless: process.env.HEADLESS !== "0",
-    concurrency,
-    occupiedColors,
-  });
+  const results = await scrapeAll(apartments);
 
   let changedCount = 0;
 
   for (const r of results) {
-    const h = hashDays(r.occupied_days);
-    const prev = state.last_hash[r.id];
-
-    const hasError = !!r.error;
-    const changed = !hasError && h !== prev;
-
-    if (hasError) {
+    if (r.error) {
       console.log(`[${r.id}] error: ${r.error}`);
       continue;
     }
 
-    if (changed) {
-      const ics = generateIcsForApartment(r, r.occupied_days);
-      const filePath = writeIcsFile(outDir, r, ics);
+    const days = r.occupied_days || [];
+    const h = hashDays(days);
+    const old = state.last_hash[r.id];
+
+    if (h !== old) {
+      const ics = generateIcsForApartment(r, days);
+      const filePath = writeIcsFile(docsDir, r, ics);
+
       state.last_hash[r.id] = h;
       changedCount++;
+
       console.log(
-        `[${r.id}] update. days=${r.occupied_days.length}. file=${path.basename(
-          filePath
-        )}`
+        `[${r.id}] update. days=${days.length}. file=${path.basename(filePath)}`
       );
     } else {
-      console.log(`[${r.id}] ok. days=${r.occupied_days.length}`);
-    }
-
-    if (process.env.PRINT_COLORS === "1") {
-      const top = (r.debug_colors || [])
-        .map(([c, n]) => `${c}=${n}`)
-        .join(", ");
-      console.log(`[${r.id}] colors: ${top}`);
+      console.log(`[${r.id}] ok. days=${days.length}`);
     }
   }
 
   writeJson(statePath, state);
+
   console.log(`done. updated=${changedCount}/${results.length}`);
 }
 
-main().catch((e) => {
-  console.error(String(e && e.stack ? e.stack : e));
+main().catch((err) => {
+  console.error(err);
   process.exit(1);
 });
